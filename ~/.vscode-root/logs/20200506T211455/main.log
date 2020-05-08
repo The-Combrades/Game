@@ -1,0 +1,4 @@
+[2020-05-06 21:14:56.150] [main] [error] [File Watcher (node.js)] Error: ENOENT: no such file or directory, stat '/var/www/html/Game/~/.vscode-root/User'
+[2020-05-06 21:14:57.359] [main] [info] update#setState idle
+[2020-05-06 21:15:27.364] [main] [info] update#setState checking for updates
+[2020-05-06 21:15:27.594] [main] [info] update#setState idle
