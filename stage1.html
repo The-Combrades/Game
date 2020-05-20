@@ -319,7 +319,7 @@
             switch (code) {
                 //w pressed. Make roof ground
                 case 87:
-                    if (playerCube.position.y != -2) //supposed to stop double w-rotation but the if statement not workin
+                    if (playerPhys.position.y != -2) //supposed to stop double w-rotation but the if statement not workin
                     {
                         player.rotateZ(Math.PI);
                         playerPhys.position.y = -2.5;
@@ -331,7 +331,7 @@
 
                 //s pressed
                 case 83:
-                    if (playerCube.position.y != -6) {
+                    if (playerPhys.position.y != -6) {
                         player.rotateZ(Math.PI);
                         playerPhys.position.y = -5.5;
                         player.position.y = playerPhys.position.y;
