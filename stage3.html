@@ -16,6 +16,13 @@
         var mixer;
         var clock;
 
+        var left_mixer; //animation mixer
+        var left_action; //clipaction
+        var left_strafe; //Object3D
+        var leftAnimation; //the gltf.animation[0]
+
+        
+
         //requisites for rendering the world
         var scene;
         var camera;
@@ -53,7 +60,7 @@
             getPlayerPhysics();
         }
 
-        var x0 = 0, y0 = -5.3, z0 = tunnel_length/2 - 30 ; //the initial coordinate of the player
+        var x0 = 1 , y0 = -5.3, z0 = tunnel_length/2 - 30 ; //the initial coordinate of the player
         var lastZ = z0; //last player z coord
         var portalZ; //portal's z coord
 
@@ -85,6 +92,7 @@
             var scale_factor = 0.9;
             player.scale.y = (scale_factor, scale_factor, scale_factor);
             player.rotation.set(0, Math.PI, 0);
+            player.name = "player";
 
             scene.add(player);
             scene.add(tunnel);
@@ -121,7 +129,7 @@
             obj.position.set(0, -2, 0); //it works okay.
             return obj;
         }
-	
+
 	//approximates player physics with a cube
         function getPlayerPhysics() {
             var shape = new CANNON.Box(new CANNON.Vec3(0.5, 1.3, 0.2)); 
@@ -157,6 +165,7 @@
                         }
                     );
                 body.position.copy(collidable_objs[i].position);
+                body.quaternion.copy(collidable_objs[i].quaternion) ;
                 body.velocity.set(0, 0, 0);
                 world.addBody(body);
                 collidable_phys.push(body); //add to the aray of the obstacle bodies
@@ -168,18 +177,18 @@
             var tunnel_width = 10; //length in x direction
             var tunnel_breadth = 2; //length in y direction
 
-            var tunnelColor = 0x222222; //color of the tunnel
+            var tunnelColor = 0x332222; //color of the tunnel
             //texture for the tunnel wall
-            var texture = new THREE.TextureLoader().load("./textures/brick_roughness.jpg");
+            var texture = new THREE.TextureLoader().load("./textures/brick001.jpg");
             texture.wrapS = THREE.RepeatWrapping;
             texture.wrapT = THREE.RepeatWrapping;
-            texture.repeat.set(1, 10); //so texture not stretched of the entire z length
+            texture.repeat.set(1, 100); //so texture not stretched of the entire z length
 
             //texture for the obstacle
-            var obsTexture = new THREE.TextureLoader().load("./textures/brick_roughness.jpg");
+            var obsTexture = new THREE.TextureLoader().load("./textures/metal003.gif");
             obsTexture.wrapS = THREE.RepeatWrapping;
             obsTexture.wrapT = THREE.RepeatWrapping;
-            obsTexture.repeat.set(0.4, 0.1);
+            obsTexture.repeat.set(1,1);
 
 
             //tunnel's material
@@ -242,7 +251,7 @@
                     new THREE.MeshPhongMaterial
                         (
                             {
-                                color: 0xff0000,
+                                color: 0x0099ff,
                                 shininess: 10,
                                 map: portal_texture
                             }
@@ -253,7 +262,7 @@
             tunnel.add(portal);
 
             //add a light a the portal so it has a glow effect.
-            var portalLight = new THREE.PointLight(0xff0000, 4, 100); //white light
+            var portalLight = new THREE.PointLight(0x0099ff, 3, 100); //white light
             portalLight.position.set(0, -4, -tunnel_length / 2 + 10);
             scene.add(portalLight);
 
@@ -290,19 +299,43 @@
                     tunnel.add(obs1);
                     collidable_objs.push(obs0);
                     collidable_objs.push(obs1);
+                }else if(i % 210 == 0) //add the side pane
+                {
+                    var obs0 = obstacle_mesh.clone();
+                    var obs1 = obstacle_mesh.clone();
+                    obs0.rotation.set(0,0,Math.PI/2);
+                    obs1.rotation.set(0,0,-Math.PI/2);
+                    obs0.position.set(2, -6, i + Math.random() * 1); //place obstacle a 160 paces away from last in positive z dir
+                    obs1.position.set(2, -6, -i - Math.random() * 1); //place in -z dir
+                    tunnel.add(obs0);
+                    tunnel.add(obs1);
+                    collidable_objs.push(obs0);
+                    collidable_objs.push(obs1);
+                }else if(i % 270 == 0)
+                {
+                    var obs0 = obstacle_mesh.clone();
+                    var obs1 = obstacle_mesh.clone();
+                    obs0.rotation.set(0,0,Math.PI/2);
+                    obs1.rotation.set(0,0,-Math.PI/2);
+                    obs0.position.set(-2, -6, i + Math.random() * 1); //place obstacle a 160 paces away from last in positive z dir
+                    obs1.position.set(-2, -6, -i - Math.random() * 1); //place in -z dir
+                    tunnel.add(obs0);
+                    tunnel.add(obs1);
+                    collidable_objs.push(obs0);
+                    collidable_objs.push(obs1);
                 }
             }
             //add point lights every hundred z positions in both directions
-            for (var i = 0; i < tunnel_length/2; i += 100) {
+            for (var i = 0; i < tunnel_length/2 +50; i += 100) {
                 //positive z direction
                 var light0;  // A light shining from the top of the roof;
-                light0 = new THREE.HemisphereLight(0x444444, 0.0001, 1);//a low intensity gray color
+                light0 = new THREE.HemisphereLight(0x111111, 0.0001, 1);//a low intensity gray color
                 light0.position.set(0, 0, i);
                 scene.add(light0);
 
                 //-z direction
                 var light1;  // A light shining from the top of the roof;
-                light1 = new THREE.HemisphereLight(0x444444, 0.0001, 1);//a low intensity gray color
+                light1 = new THREE.HemisphereLight(0xffffff, 0.0001, 1);//a low intensity gray color
                 light1.position.set(0, 0, -i);
                 scene.add(light1);
             }
@@ -310,83 +343,13 @@
         }
 
 
-        function doRender() {
-
-            renderer.render(scene, camera);
-        }
-
-        //player movements when keyboard is pressed
-        doKey = function (event) {
-            var code = event.keyCode;
-            switch (code) 
-            {
-
-                //____________________PLAYER POSITION CONTROL_________________________//
-                //w pressed. Make roof ground
-                case 87:
-                    if (playerPhys.position.y != -2.5) //supposed to stop double w-rotation but the if statement not workin
-                    {
-                        player.rotateZ(Math.PI);
-                        playerPhys.position.y = -2.5;
-                        player.position.y = playerPhys.position.y;
-                    }
-                    break;
-
-                //s pressed
-                case 83:
-                    if (playerPhys.position.y != -5.3) {
-                        player.rotateZ(Math.PI);
-                        playerPhys.position.y = -5.3;
-                        player.position.y = playerPhys.position.y;
-                    }
-                    break;
-                //space pressed
-                case 32:
-                    if (!playing) //if game isnt already playing
-                    {
-                        playLvl();
-                    }
-                    break;
-
-
-                //________________CAMERA VIEW CONTROL___________//
-                case 38: //up
-                    if (camera.position.y < -2) {
-                        camera.position.y += 0.1;
-                    }
-                    break;
-
-                case 40: //down
-                    if (camera.position.y > -6) {
-                        camera.position.y -= 0.1;
-                    }
-                    break;
-
-                case 37: //left
-                    if (camera.position.x > -2) {
-                        camera.position.x -= 0.1;
-                    }
-                    break;
-
-
-                    break;
-
-                case 39: //right
-                    if (camera.position.x < 2) {
-                        camera.position.x += 0.1;
-                    }
-                    break;
-
-
-            }
-
-            doRender();
-        }
-
+       
         //called once each frame for animations
         function updateForFrame() {
             checkCollision();
             camera.position.z = playerPhys.position.z + 20; //keep the camera alwalys behind the player
+            camera.rotation.z -= 0.01;
+
         }
         //update positions in physics world
         function updatePhysics() {
@@ -408,9 +371,10 @@
 
                 document.getElementById("playCheckbox").checked = false;
                 document.location.reload();
+                camera.rotation.z = 0;
                 alert("You just ran into a wall.....");
 
-            } else if (playerPhys.position.z < portalZ) //through portal?
+            } else if (playerPhys.position.z < portalZ) //through portal
             {
                 document.getElementById("playCheckbox").checked = false;
                 document.location.reload();
@@ -421,6 +385,96 @@
 
 
 
+        }
+
+        function doRender() {
+
+            renderer.render(scene, camera);
+        }
+
+        //player movements when keyboard is pressed
+        doKey = function (event) {
+        var code = event.keyCode;
+        switch (code) 
+        {
+
+            //____________________PLAYER POSITION CONTROL_________________________//
+            //a pressed: go left
+            case 65:
+                playerPhys.position.x = -1;
+                player.position.x = playerPhys.position.x;
+            
+                break;
+
+            //d is pressed: go right
+            case 68:
+            if (playerPhys.position.x != 1) 
+            {
+                playerPhys.position.x = 1;
+                player.position.x = playerPhys.position.x;
+            }
+            break;
+
+
+            //w pressed. Make roof ground
+            case 87:
+                if (playerPhys.position.y != -2.5) //supposed to stop double w-rotation but the if statement not workin
+                {
+                    player.rotateZ(Math.PI);
+                    playerPhys.position.y = -2.5;
+                    player.position.y = playerPhys.position.y;
+                }
+                break;
+
+            //s pressed
+            case 83:
+                if (playerPhys.position.y != -5.3) {
+                    player.rotateZ(Math.PI);
+                    playerPhys.position.y = -5.3;
+                    player.position.y = playerPhys.position.y;
+                }
+                break;
+            //space pressed
+            case 32:
+                if (!playing) //if game isnt already playing
+                {
+                    playLvl();
+                }
+                break;
+
+
+            //________________CAMERA VIEW CONTROL___________//
+            case 38: //up
+                if (camera.position.y < -2) {
+                    camera.position.y += 0.1;
+                }
+                break;
+
+            case 40: //down
+                if (camera.position.y > -6) {
+                    camera.position.y -= 0.1;
+                }
+                break;
+
+            case 37: //left
+                if (camera.position.x > -2) {
+                    camera.position.x -= 0.1;
+                }
+                break;
+
+
+                break;
+
+            case 39: //right
+                if (camera.position.x < 2) {
+                    camera.position.x += 0.1;
+                }
+                break;
+
+
+        }
+
+            doRender();
         }
 
 
@@ -445,6 +499,7 @@
 
                 var delta = clock.getDelta();
                 if (mixer) mixer.update(delta);
+                //cannonDebugRenderer.update();
                 doRender();
                 requestAnimationFrame(doFrame);
 
@@ -459,8 +514,7 @@
             document.getElementById("playCheckbox").checked = true;
             doPlayCheckbox(); //start animating
         }
-       
-
+        
         //Initialising the canvas and its children when page loads
         function init() {
             canvas = document.getElementById("canvas");
@@ -480,6 +534,7 @@
             document.addEventListener("keydown", doKey, false);
             createWorld(); //build world
             worldPhysics();
+            //cannonDebugRenderer = new THREE.CannonDebugRenderer(scene, world);
             doRender();
             alert("Welcome to the first level! Your goal is to get to and through the portal at the end of the tunnel. Use W to run on the roof and S to go back to the floor.To beging double tap the button space then run Mark, run! ")
         }
