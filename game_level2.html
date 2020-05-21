@@ -1,0 +1,488 @@
+<html>
+<head>
+	<script src="./three.js-master/build/three.js"></script>
+	<script src="./three.js-master/GLTFLoader.js"></script>
+	<script src="./three.js-master/OrbitControls.js"></script>
+	<script src="./cannon.js-master/build/cannon.js"></script>
+    <script src="./cannon.js-master/tools/threejs/CannonDebugRenderer.js"></script>
+	<script>
+		var canvas, renderer; //the html's canvas and webglrenderer
+		var world; //object of World class
+		var animating = false;
+		var frameNumber = 0;
+		var mixer;
+		var world1;
+		var clock;
+		var playing = false;
+		var scene;
+		var camera;
+		var model;
+		var rollingTree,spinningTree;
+		var enviromentMat;
+		var eviroment;
+		var player,run,left,right,jump;
+		var particleGeometry;
+		var particleCount=20;
+		var explosionPower =1.06;
+		var particles;
+		var obstacleHolder = [];
+		var collidable_phys = [];
+		var cannonDebugRenderer; //for visualising physics
+		var playerCube; //cube approximation of character for collision detection
+      var playerPhys; //player physics
+		var tunnel_length = 5000;
+      var introTxt;
+		var x0 = 0, y0 = -5.3, z0 = tunnel_length/2 - 30 ;
+	 	var lastZ = z0;
+	 	var portalZ;
+	//simullates physics for just obstacle meshes and the player mesh.
+        function worldPhysics() {
+            world1 = new CANNON.World(); //initilise CANNON world
+            world1.gravity.set(0, 0, 0); 
+
+            //Broadphase algorithm to check collisions
+            world1.broadphase = new CANNON.NaiveBroadphase();
+
+            world1.solver.iterations = 10;
+
+            getTunnelPhysics();
+            getPlayerPhysics();
+        }
+		
+      function createWorld(){
+          hasCollided=false;
+          clock = new THREE.Clock();
+          renderer.setClearColor("black"); //set background to grey
+          scene = new THREE.Scene();
+
+          camera = new THREE.PerspectiveCamera(60, canvas.width/canvas.height, 0.1, 100 ); 
+          camera.position.z = 6.5;
+          camera.position.y = 2.5;
+          var hemisphereLight = new THREE.HemisphereLight(0xfffafa,0x000000, 0.6);
+          hemisphereLight.position.set(0,0,1);
+          camera.add(hemisphereLight);
+          scene.add(camera);
+          
+          var light = new THREE.DirectionalLight(0xffffff, 0.5);
+          light.position.set(-8,8,40);
+          light.castShadow = true;
+          light.shadow.mapSize = new THREE.Vector2(1024, 1024);
+          light.shadow.camera.near = 0.1;
+          light.shadow.camera.far = 1500;
+          
+          scene.add(light);
+          
+          enviroment = getGameArea();
+          player = new THREE.Object3D();
+          player.add(runPlayer());
+          player.scale.y = 2.5;
+          player.scale.x = 2.5;
+          player.rotation.set(0, Math.PI, 0);
+          //var ground = new THREE.BoxGeometry(10,40,0.2);
+          ///var groundMat = new THREE.MeshLambertMaterial({color:"grey"});
+          scene.add(player);
+          
+          scene.add(enviroment);
+      }
+		//approximates player physics with a cube
+        function getPlayerPhysics() {
+            var shape = new CANNON.Box(new CANNON.Vec3(0.5, 1.3, 0.2)); 
+            playerPhys = new CANNON.Body
+                (
+                    {
+                        mass: 1,
+                        shape: shape
+                    }
+                );
+            playerPhys.position.set(x0, y0, z0);
+            playerPhys.velocity.set(0, 0, -50); //move the player now not the camera anymore
+            playerPhys.linearDamping = 0; //so player doesn't slow down
+            world1.addBody(playerPhys);
+        }
+
+        var obstacle_len = 10; //size in x dir
+        var obstacle_height = 4; //size in y dir
+        var obstacle_breadth = 3 //size in z dir
+
+        //build physical version of tunnel
+        function getTunnelPhysics() {
+            //shape of a t
+            for (var i = 0; i < obstacleHolder.length; ++i)//for each obstacle
+            {
+                //create a shape half the dimensions(coz cannon and threejs appear to be related in that way) of the graphical versions
+                var shape = new CANNON.Box(new CANNON.Vec3(obstacle_len / 2, obstacle_height / 2, obstacle_breadth / 2));
+                var body = new CANNON.Body
+                    (
+                        {
+                            mass: 0, //make em static
+                            shape: shape
+                        }
+                    );
+                body.position.copy(obstacleHolder[i].position);
+                body.velocity.set(0, 0, 0);
+                world1.addBody(body);
+                collidable_phys.push(body); //add to the aray of the obstacle bodies
+            }
+        }
+      //returns the player object 3D
+      function runPlayer(){
+          var obj = new THREE.Object3D();
+          var modelLoader = new THREE.GLTFLoader();
+          modelLoader.load
+          ('./Models/Zuck/run/scene.gltf',
+              function(gltf){
+                  mixer = new THREE.AnimationMixer(gltf.scene);
+                  run = mixer.clipAction(gltf.animations[0]);
+                  run.play();
+						model = gltf.scene;
+                  //TODO setting up the model to cast shadow
+                  model.traverse(o => {
+						if (o.isMesh) {
+							o.castShadow = true;
+							o.receiveShadow = false;
+						}
+						});
+						
+						obj.add(model);   
+              },
+              undefined,
+              function(error){
+                  console.error(error);
+              });    
+          obj.position.set(0,-2.5,15);
+          return obj;
+      }
+
+      //draws the game enviroment
+      function getGameArea(){
+      	var world = new THREE.Object3D();
+      	// the floor of the wolrd and its material with texture
+      	var floor = new THREE.BoxGeometry(20,2,5000);
+      	
+      	var floorTex = new THREE.TextureLoader().load("./textures/textures/road.jpg");
+      	floorTex.wrapS = THREE.RepeatWrapping;
+			floorTex.wrapT = THREE.RepeatWrapping;
+			
+			
+			var floorMaterial = new THREE.MeshStandardMaterial({color:"white",map:floorTex});
+			
+			var ground = new THREE.Mesh(floor,floorMaterial);
+			ground.receiveShadow = true;
+			ground.castShadow = false;
+			ground.rotation.z= Math.PI;
+         ground.position.set(0,-8,0);
+
+			//TODO add the sides of the game area and the sky.
+         	var tunnelColor = "grey"; //color of the tunnel
+         //texture for the tunnel wall
+         var texture = new THREE.TextureLoader().load("./textures/brick_roughness.jpg");
+         texture.wrapS = THREE.RepeatWrapping;
+         texture.wrapT = THREE.RepeatWrapping;
+         texture.repeat.set(1, 10); //so texture not stretched of the entire z length
+         
+         //tunnel's material
+         tunnelMat = new THREE.MeshPhongMaterial({color: tunnelColor,shininess: 10,map: texture});
+         var tunnel = new THREE.Object3D();
+			var roof = new THREE.Mesh(
+				 new THREE.BoxGeometry(20, 2, 5000),
+				 tunnelMat
+			);
+			roof.position.y=5.5;
+			//left wall of tunnel
+			var left = roof.clone();
+			left.rotation.z = Math.PI / 2;
+			left.position.set(-18, -4, 0);
+			//right wall
+			var right = roof.clone();
+			right.rotation.z = 3 * Math.PI / 2;
+			right.position.set(18, -4, 0);
+         //a model for tree obstacle
+         world.add(right);
+         world.add(left);
+         world.add(roof);
+         //a model for tree obstacle
+         var cylinder = new THREE.CylinderGeometry(1.5,1.5,5,30,30,false);
+         
+         var cylinderTex = new THREE.TextureLoader().load("./textures/textures/tree.jpg");
+         cylinderTex.wrapS = THREE.RepeatWrapping;
+         cylinderTex.wrapT = THREE.RepeatWrapping;
+         
+         var cylinderM = new THREE.MeshStandardMaterial({color:"white", map:cylinderTex});
+			
+			//tree obstacle
+			var tree = new THREE.Mesh(cylinder,cylinderM);
+			tree.castShadow = true;
+			tree.recieveShadow = false;
+			tree.rotation.z = Math.PI/2;
+			tree.position.set(0,-5,0);
+			
+			//adding the ground
+			world.add(ground);
+			
+			
+			//rolling obstacle, global viarable for animation
+			rollingTree = tree.clone();
+			rollingTree.scale.set(1,3,1);
+			
+			/*stationary obstale to the chest of the player at 15 TODO no sliding model
+			var obstacle = tree.clone();
+			obstacle.scale.set(1,3,1);
+			obstacle.position.set(0,-1,0);*/
+			
+			//spining obstacle and need to be global viarable for animation
+			spinningTree = tree.clone();
+			spinningTree.scale.set(1,3,1);
+			
+			//middle obstacle
+			var midObstacle = tree.clone();
+			midObstacle.rotation.z = Math.PI;
+			midObstacle.scale.set(2,1.5,1);
+			
+			//
+			var leftOb = midObstacle.clone();
+			leftOb.position.x = 2.5;
+			
+			//
+			var rightOb = midObstacle.clone();
+			rightOb.position.x = -2.5;
+			
+			//store the obstacles inside a array add them randomly to the enviroment
+			var arrObstacle = [leftOb,rightOb,midObstacle]; 
+			
+			//_______________THE LEVEL's finish Line wich is a portal player goes through(checkCollision detirmines this)______________________\\
+			var portal_texture = new THREE.TextureLoader().load("./textures/portal0.jpg");
+			portal_texture.wrapS = THREE.RepeatWrapping;
+			portal_texture.wrapT = THREE.RepeatWrapping;
+			portal_texture.repeat.set(1, 1); //so texture not stretched of the entire z length
+
+			//create the geometry
+			var portal = new THREE.Mesh
+				 (
+					  new THREE.BoxGeometry(20, 10, 1), //a slab facing the camera
+					  new THREE.MeshPhongMaterial
+						   (
+						       {
+						           color: 0xff0000,
+						           shininess: 10,
+						           map: portal_texture
+						       }
+						   )
+				 );
+			portal.position.set(0, -1, -2495); //place it at the end of the tunnel
+			portalZ = portal.position.z;
+			world.add(portal);
+
+			//add a light a the portal so it has a glow effect.
+			var portalLight = new THREE.PointLight(0xff0000, 4, 100); //white light
+			portalLight.position.set(0, -1, -5000 / 2 + 10);
+			scene.add(portalLight);
+
+			
+			//adding the obstacles randomly
+			for (var j=-2500; j<2500; j++){
+				if(j%50==0){
+					var i = Math.floor(Math.random() * 3);
+					if(i == 0){
+						rollingTree = arrObstacle[i].clone(); // update the variables for animations
+						rollingTree.position.z = -j;
+						obstacleHolder.push(rollingTree);
+						world.add(rollingTree);
+					}
+					if(i == 1){
+						spinningTree = arrObstacle[i].clone(); //update the variables for animations
+						spinningTree.position.z = -j;
+						obstacleHolder.push(spinningTree);
+						world.add(spinningTree);
+					}
+					/*if(i == 1){
+						obstacle = arrObstacle[i].clone();
+						obstacle.position.z = -j;
+						world.add(obstacle);
+					}*/
+					if(i == 2){
+						var obj = arrObstacle[i].clone();
+						obj.position.z = -j;
+						obstacleHolder.push(obj);
+						world.add(obj);
+					}
+				}
+			}
+			//world.add(leftObstacle);
+			//world.position.set(0,0,-200);
+			return world;
+      }
+		
+                  
+      function doRender(){
+          renderer.render(scene, camera);
+      }
+
+		doKey = function(event){
+			var code = event.keyCode;
+			switch(code){
+				//w pressed, jump
+				case 87:			
+					if(true){ //TODO if player is not in the air (cant jump twice)
+					}
+					break;
+				//s pressed, slide
+				case 83: 
+					if(true){ //TODO if player is not already sliding
+					}   
+					break;
+				// a pressed, go left
+				case 65:
+					if(player.position.x >= 0 && player.position.x<=4){ //if player is not already at the left
+						player.position.x -= 4;
+					}				
+		         break;
+		      //d pressed,go right  
+				case 68:
+					if(player.position.x>=-4 && player.position.x <=0){ // if player is not already at the right
+						player.position.x += 4;
+					}
+					break;
+				//space pressed
+				case 32:
+				  if (!playing) //if game isnt already playing
+				  {
+						playLvl();
+				  }
+				  break;
+			}
+			//setTimeout(addRunningModel(player.position.x),10);
+			doRender();
+		}
+		//called when user presses space
+        function playLvl() {
+            playing = true;
+            document.getElementById("playCheckbox").checked = true;
+            doPlayCheckbox(); //start animating
+        }
+		
+		function addRunningModel(postX){
+			var x = postX;
+			scene.remove(player);
+			player = new THREE.Object3D();
+			player.add(runPlayer());
+			player.scale.y = 0.9;
+			player.rotation.set(0, Math.PI, 0);
+			player.position.x = x;
+			scene.add(player);
+		}
+		
+		function positionAtoB(a,b){
+			x = a.position.x - b.position.x;
+			y = a.position.y - b.position.y;
+			z = a.position.z - b.position.z;
+			return Math.sqrt(x*x+y*y+z*z);
+		}
+
+      //called once each frame for animations
+      function updateForFrame(frameNo){
+      	//for(var i=0; i<obstacleHolder.length; i++){
+      		//obstacleHolder[i].rotation.x += 0.6;
+      		checkCollision();
+      	//}
+         enviroment.position.z += 2 + 0.01*frameNo;
+         /*if(enviroment.position.z >= 2500){
+         	document.getElementById("playCheckbox").checked = false;
+				document.location.reload();
+				alert("You Passed the Stage!");
+         }*/
+         //doObstacleLogic();
+         //doExplosionLogic();
+      }
+
+      //when user toggles Play checkbox
+      function doPlayCheckbox(){
+          var run = document.getElementById("playCheckbox").checked;
+          if(run != animating)
+          {
+              animating = run;
+              if(animating)
+              {
+                  requestAnimationFrame(doFrame);
+              }
+          }
+      }
+      function updatePhysics() {
+			world1.step(1 / 60);
+			//increment each obstacles's body
+			for (var i = 0; i < obstacleHolder.length; ++i) {
+				 obstacleHolder[i].position.copy(collidable_phys[i].position);
+			}
+
+			//playerCube.position.copy(playerPhys.position);
+			player.position.copy(playerPhys.position);
+		}
+       //uses raycasting to check for collsions of playerCube with obstacles
+		function checkCollision() {
+			//checks collisions or if gone through portal
+			if (playerPhys.position.z > lastZ) //if playe is going in opposite direction he has collided
+			{
+
+				 document.getElementById("playCheckbox").checked = false;
+				 document.location.reload();
+				 alert("You just ran into a wall.....");
+
+			} else if (playerPhys.position.z < portalZ) //through portal?
+			{
+				document.getElementById("playCheckbox").checked = false;
+				document.location.reload();
+				alert("You Passed the Stage!");
+			} else {
+				 lastZ = playerPhys.position.z;
+			}
+		}
+
+      //called by system to drive the animation
+      function doFrame(){
+          if(animating){
+              frameNumber++;
+              updateForFrame(frameNumber);
+              
+              var delta = clock.getDelta();
+              if(mixer)mixer.update(delta);
+
+              doRender();
+              requestAnimationFrame(doFrame);
+          }
+      }
+      //Initialising the canvas and its children when page loads
+      function init(){
+          try{
+              canvas = document.getElementById("canvas");
+              renderer = new THREE.WebGLRenderer({canvas: canvas,antialias: true});
+              renderer.shadowMap.enabled = true; //enable shadow
+              renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+              
+          }catch(e){
+              alert("Your browser does not have webgl");
+          }               
+          document.getElementById("playCheckbox").checked = false;
+          document.getElementById("playCheckbox").onchange = doPlayCheckbox;
+          document.addEventListener("keydown",doKey,false);
+          
+          createWorld();
+          
+          worldPhysics();
+          cannonDebugRenderer = new THREE.CannonDebugRenderer(scene, world1);
+          doRender();
+          alert("Welcome to the second level! Your goal is avoid all the obstacles. use a to go keft and d to go right.To beging double tap the button space then run Mark, run! ");   
+      }
+	</script>
+</head>
+
+<body onload="init()">
+	<p>
+		<label>
+			 <input type="checkbox" id="playCheckbox"> <b>PLAY</b>
+		</label>
+	</p>
+
+	<div id="canvas-holder">
+		<canvas id="canvas" width=1200 height=600></canvas>
+	</div>
+</body>
+</html>
