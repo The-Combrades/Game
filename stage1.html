@@ -39,24 +39,20 @@
         var tunnel_length = 1500; //how far the tunnel runs in the z direction
 
         var cannonDebugRenderer; //for visualising physics
-	//simullates physics for just obstacle meshes and the player mesh.
-        function worldPhysics() {
-            world = new CANNON.World(); //initilise CANNON world
-            world.gravity.set(0, 0, 0); 
-
-            //Broadphase algorithm to check collisions
-            world.broadphase = new CANNON.NaiveBroadphase();
-
-            world.solver.iterations = 10;
-
-            getTunnelPhysics();
-            getPlayerPhysics();
-        }
+	
 
         var x0 = 0, y0 = -5.3, z0 = tunnel_length/2 - 30 ; //the initial coordinate of the player
         var lastZ = z0; //last player z coord
         var portalZ; //portal's z coord
 
+        var obstacle_len = 10; //size in x dir
+        var obstacle_height = 4; //size in y dir
+        var obstacle_breadth = 3 //size in z dir
+
+
+        //________________________________GRAPHICS___________________________________\\
+        //----------------------------------------------------------------------------\\
+        
         //build graphical world
         function createWorld() {
             clock = new THREE.Clock();
@@ -90,8 +86,6 @@
             scene.add(tunnel);
         }
 
-
-
         //returns the player object 3D
         function getPlayer() {
 
@@ -120,47 +114,6 @@
 
             obj.position.set(0, -2, 0); //it works okay.
             return obj;
-        }
-	
-	//approximates player physics with a cube
-        function getPlayerPhysics() {
-            var shape = new CANNON.Box(new CANNON.Vec3(0.5, 1.3, 0.2)); 
-            playerPhys = new CANNON.Body
-                (
-                    {
-                        mass: 1,
-                        shape: shape
-                    }
-                );
-            playerPhys.position.set(x0, y0, z0);
-            playerPhys.velocity.set(0, 0, -50); //move the player now not the camera anymore
-            playerPhys.linearDamping = 0; //so player doesn't slow down
-            world.addBody(playerPhys);
-        }
-
-        var obstacle_len = 10; //size in x dir
-        var obstacle_height = 4; //size in y dir
-        var obstacle_breadth = 3 //size in z dir
-
-        //build physical version of tunnel
-        function getTunnelPhysics() {
-            //shape of a t
-            for (var i = 0; i < collidable_objs.length; ++i)//for each obstacle
-            {
-                //create a shape half the dimensions(coz cannon and threejs appear to be related in that way) of the graphical versions
-                var shape = new CANNON.Box(new CANNON.Vec3(obstacle_len / 2, obstacle_height / 2, obstacle_breadth / 2));
-                var body = new CANNON.Body
-                    (
-                        {
-                            mass: 0, //make em static
-                            shape: shape
-                        }
-                    );
-                body.position.copy(collidable_objs[i].position);
-                body.velocity.set(0, 0, 0);
-                world.addBody(body);
-                collidable_phys.push(body); //add to the aray of the obstacle bodies
-            }
         }
 
         //draws tunnel graphics
@@ -310,6 +263,81 @@
         }
 
 
+        //________________________________PHYSICS_____________________________________\\
+        //simulates physics for just obstacle meshes and the player mesh.
+        function worldPhysics() {
+            world = new CANNON.World(); //initilise CANNON world
+            world.gravity.set(0, 0, 0); 
+
+            //Broadphase algorithm to check collisions
+            world.broadphase = new CANNON.NaiveBroadphase();
+
+            world.solver.iterations = 10;
+
+            getTunnelPhysics();
+            getPlayerPhysics();
+        }
+
+        
+	//approximates player physics with a cube
+        function getPlayerPhysics() {
+            var shape = new CANNON.Box(new CANNON.Vec3(0.5, 1.3, 0.3)); 
+            playerPhys = new CANNON.Body
+                (
+                    {
+                        mass: 1,
+                        shape: shape
+                    }
+                );
+            playerPhys.position.set(x0, y0, z0);
+            playerPhys.velocity.set(0, 0, -50); //move the player now not the camera anymore
+            playerPhys.linearDamping = 0; //so player doesn't slow down
+            world.addBody(playerPhys);
+        }
+
+        
+        //build physical version of tunnel
+        function getTunnelPhysics() {
+            //shape of a t
+            for (var i = 0; i < collidable_objs.length; ++i)//for each obstacle
+            {
+                //create a shape half the dimensions(coz cannon and threejs appear to be related in that way) of the graphical versions
+                var shape = new CANNON.Box(new CANNON.Vec3(obstacle_len / 2, obstacle_height / 2, obstacle_breadth / 2));
+                var body = new CANNON.Body
+                    (
+                        {
+                            mass: 0, //make em static
+                            shape: shape
+                        }
+                    );
+                body.position.copy(collidable_objs[i].position);
+                body.velocity.set(0, 0, 0);
+                world.addBody(body);
+                collidable_phys.push(body); //add to the aray of the obstacle bodies
+            }
+        }
+
+        //__________________________FRAME UPDATES AND OTHER____________________________\\
+        
+        //called once each frame for animations
+        function updateForFrame() {
+            checkCollision();
+            camera.position.z = playerPhys.position.z + 20; //keep the camera alwalys behind the player
+        }
+
+        //update positions in physics world
+        function updatePhysics() {
+            world.step(1 / 60);
+            //increment each obstacles's body
+            for (var i = 0; i < collidable_objs.length; ++i) {
+                collidable_objs[i].position.copy(collidable_phys[i].position);
+            }
+
+            //playerCube.position.copy(playerPhys.position);
+            player.position.copy(playerPhys.position);
+        }
+
+
         function doRender() {
 
             renderer.render(scene, camera);
@@ -383,23 +411,7 @@
             doRender();
         }
 
-        //called once each frame for animations
-        function updateForFrame() {
-            checkCollision();
-            camera.position.z = playerPhys.position.z + 20; //keep the camera alwalys behind the player
-        }
-        //update positions in physics world
-        function updatePhysics() {
-            world.step(1 / 60);
-            //increment each obstacles's body
-            for (var i = 0; i < collidable_objs.length; ++i) {
-                collidable_objs[i].position.copy(collidable_phys[i].position);
-            }
-
-            //playerCube.position.copy(playerPhys.position);
-            player.position.copy(playerPhys.position);
-        }
-
+        
         //uses raycasting to check for collsions of playerCube with obstacles
         function checkCollision() {
             //checks collisions or if gone through portal
@@ -442,7 +454,7 @@
                 frameNumber++;
                 updateForFrame();
                 updatePhysics();
-
+                //cannonDebugRenderer.update();
                 var delta = clock.getDelta();
                 if (mixer) mixer.update(delta);
                 doRender();
@@ -480,6 +492,7 @@
             document.addEventListener("keydown", doKey, false);
             createWorld(); //build world
             worldPhysics();
+            //cannonDebugRenderer = new THREE.CannonDebugRenderer(scene,world);
             doRender();
             alert("Welcome to the first level! Your goal is to get to and through the portal at the end of the tunnel. Use W to run on the roof and S to go back to the floor.To beging double tap the button space then run Mark, run! ")
         }
